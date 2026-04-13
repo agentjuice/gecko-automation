@@ -5,17 +5,6 @@
     "pump_duration_seconds": 3.0,
     "gpio_relay_pin": 17
   },
-  "feeder": {
-    "enabled": true,
-    "schedule_days": ["monday", "wednesday", "friday"],
-    "schedule_time": "21:00",
-    "servo_gpio_pin": 18,
-    "servo_open_angle": 90,
-    "servo_close_angle": 0,
-    "servo_hold_seconds": 2.0,
-    "vibe_gpio_pin": 27,
-    "vibe_duration_seconds": 1.0
-  },
   "sensors": {
     "bme280_enabled": true,
     "bme280_i2c_address": "0x76",

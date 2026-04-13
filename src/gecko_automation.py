@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-Gecko Automation — Automated care system for leopard gecko.
+Gecko Automation — Water + monitoring system for leopard gecko.
 
 Controls:
   - Peristaltic water pump (via relay on GPIO)
-  - Mealworm dispenser servo gate (via PWM on GPIO)
-  - Vibration motor (via MOSFET on GPIO)
 
 Monitors:
   - BME280 temperature/humidity sensor (I2C)
@@ -15,6 +13,9 @@ Reports:
   - MQTT (Home Assistant integration)
   - Telegram alerts
   - Web dashboard (Flask)
+
+Note: Feeding is handled by standalone Petbank carousel feeders
+with their own built-in timers (no Pi integration needed).
 """
 
 import json
@@ -23,7 +24,7 @@ import signal
 import sys
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import schedule
@@ -87,11 +88,10 @@ def load_config():
 # ============================================
 
 class HardwareController:
-    """Controls GPIO pins for pump, servo, and vibration motor."""
+    """Controls GPIO pins for water pump."""
 
     def __init__(self, config):
         self.config = config
-        self.servo_pwm = None
 
         if PI_HARDWARE:
             GPIO.setmode(GPIO.BCM)
@@ -100,16 +100,6 @@ class HardwareController:
             # Relay for water pump (active LOW for most relay modules)
             self.pump_pin = config["water"]["gpio_relay_pin"]
             GPIO.setup(self.pump_pin, GPIO.OUT, initial=GPIO.HIGH)
-
-            # Servo for feeder gate
-            self.servo_pin = config["feeder"]["servo_gpio_pin"]
-            GPIO.setup(self.servo_pin, GPIO.OUT)
-            self.servo_pwm = GPIO.PWM(self.servo_pin, 50)  # 50Hz for servo
-            self.servo_pwm.start(0)
-
-            # Vibration motor via MOSFET
-            self.vibe_pin = config["feeder"]["vibe_gpio_pin"]
-            GPIO.setup(self.vibe_pin, GPIO.OUT, initial=GPIO.LOW)
 
             # Float switch (pull-up, goes LOW when water is low)
             if config["water_level"]["enabled"]:
@@ -131,38 +121,6 @@ class HardwareController:
             time.sleep(0.1)  # Simulate
         log.info("💧 Water pump complete")
 
-    def set_servo_angle(self, angle):
-        """Set servo to a specific angle (0-180)."""
-        if PI_HARDWARE and self.servo_pwm:
-            duty = 2.5 + (angle / 180.0) * 10.0  # Map 0-180 to 2.5-12.5 duty
-            self.servo_pwm.ChangeDutyCycle(duty)
-            time.sleep(0.5)
-            self.servo_pwm.ChangeDutyCycle(0)  # Stop signal to prevent jitter
-
-    def dispense_food(self):
-        """Run the full feeding sequence: vibrate → open gate → close gate."""
-        cfg = self.config["feeder"]
-        log.info("🦗 Feeding sequence starting")
-
-        # Vibrate to loosen any bridging
-        log.info("  Vibrating hopper...")
-        if PI_HARDWARE:
-            GPIO.output(self.vibe_pin, GPIO.HIGH)
-            time.sleep(cfg["vibe_duration_seconds"])
-            GPIO.output(self.vibe_pin, GPIO.LOW)
-        time.sleep(0.5)
-
-        # Open gate
-        log.info(f"  Opening gate to {cfg['servo_open_angle']}°")
-        self.set_servo_angle(cfg["servo_open_angle"])
-        time.sleep(cfg["servo_hold_seconds"])
-
-        # Close gate
-        log.info(f"  Closing gate to {cfg['servo_close_angle']}°")
-        self.set_servo_angle(cfg["servo_close_angle"])
-
-        log.info("🦗 Feeding sequence complete")
-
     def check_water_level(self):
         """Check float switch. Returns True if water OK, False if low."""
         if not self.config["water_level"]["enabled"]:
@@ -174,8 +132,6 @@ class HardwareController:
     def cleanup(self):
         """Clean up GPIO on shutdown."""
         if PI_HARDWARE:
-            if self.servo_pwm:
-                self.servo_pwm.stop()
             GPIO.cleanup()
             log.info("GPIO cleaned up")
 
@@ -204,14 +160,9 @@ class SensorMonitor:
     def read(self):
         """Read temperature and humidity. Returns dict or None on failure."""
         if self.bus is None:
-            # Simulation / no sensor
             return self.last_reading
 
         try:
-            # Simplified BME280 read — in production, use a proper library
-            # like `bme280` or `adafruit-circuitpython-bme280`
-            # This is a placeholder for the register-level read
-            #
             # For actual deployment, install: pip3 install RPi.bme280
             # and use:
             #   import bme280
@@ -219,6 +170,11 @@ class SensorMonitor:
             #   data = bme280.sample(self.bus, self.address, calibration)
             #   temp_f = data.temperature * 9/5 + 32
             #   humidity = data.humidity
+            #   self.last_reading = {
+            #       "temperature_f": temp_f,
+            #       "humidity": humidity,
+            #       "timestamp": datetime.now().isoformat()
+            #   }
 
             log.debug("BME280 read (placeholder — install RPi.bme280 for real reads)")
             return self.last_reading
@@ -326,10 +282,12 @@ def create_web_app(state):
 
     @app.route("/")
     def index():
+        water_class = "ok" if state.get("water_level_ok", True) else "warn"
         return f"""
         <html>
         <head><title>🦎 Gecko Automation</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="refresh" content="60">
         <style>
             body {{ font-family: -apple-system, sans-serif; background: #1a1a2e; color: #eee;
                    max-width: 600px; margin: 0 auto; padding: 20px; }}
@@ -340,6 +298,10 @@ def create_web_app(state):
             .error {{ border-left: 4px solid #e74c3c; }}
             .label {{ color: #888; font-size: 0.85em; }}
             .value {{ font-size: 1.3em; font-weight: bold; }}
+            .actions {{ margin-top: 20px; }}
+            .btn {{ background: #4ecca3; color: #1a1a2e; border: none; padding: 12px 24px;
+                    border-radius: 8px; font-size: 1em; cursor: pointer; margin-right: 8px; }}
+            .btn:hover {{ background: #3db892; }}
         </style>
         </head>
         <body>
@@ -348,11 +310,7 @@ def create_web_app(state):
                 <div class="label">Last Water Refill</div>
                 <div class="value">{state.get('last_water', 'Never')}</div>
             </div>
-            <div class="card ok">
-                <div class="label">Last Feeding</div>
-                <div class="value">{state.get('last_feed', 'Never')}</div>
-            </div>
-            <div class="card {'ok' if state.get('water_level_ok', True) else 'warn'}">
+            <div class="card {water_class}">
                 <div class="label">Water Reservoir</div>
                 <div class="value">{'✅ OK' if state.get('water_level_ok', True) else '⚠️ LOW'}</div>
             </div>
@@ -368,18 +326,19 @@ def create_web_app(state):
                 <div class="label">System Uptime</div>
                 <div class="value">{state.get('uptime', 'N/A')}</div>
             </div>
+            <div class="card">
+                <div class="label">Feeding</div>
+                <div class="value">Managed by Petbank feeders (check cameras)</div>
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="fetch('/api/water',{{method:'POST'}}).then(()=>location.reload())">💧 Manual Water</button>
+            </div>
         </body></html>
         """
 
     @app.route("/api/status")
     def api_status():
         return jsonify(state)
-
-    @app.route("/api/feed", methods=["POST"])
-    def api_feed():
-        """Manual feed trigger."""
-        state["manual_feed_requested"] = True
-        return jsonify({"status": "feed_requested"})
 
     @app.route("/api/water", methods=["POST"])
     def api_water():
@@ -407,12 +366,10 @@ class GeckoAutomation:
 
         self.state = {
             "last_water": "Never",
-            "last_feed": "Never",
             "water_level_ok": True,
             "temperature": "N/A",
             "humidity": "N/A",
             "uptime": "0m",
-            "manual_feed_requested": False,
             "manual_water_requested": False,
         }
 
@@ -431,13 +388,6 @@ class GeckoAutomation:
         if cfg["water"]["enabled"]:
             schedule.every().day.at(cfg["water"]["schedule"]).do(self.do_water)
             log.info(f"Water scheduled daily at {cfg['water']['schedule']}")
-
-        # Feeding: on configured days at configured time
-        if cfg["feeder"]["enabled"]:
-            feed_time = cfg["feeder"]["schedule_time"]
-            for day in cfg["feeder"]["schedule_days"]:
-                getattr(schedule.every(), day).at(feed_time).do(self.do_feed)
-            log.info(f"Feeding scheduled {cfg['feeder']['schedule_days']} at {feed_time}")
 
         # Sensor check: every N seconds
         if cfg["sensors"]["bme280_enabled"]:
@@ -469,18 +419,6 @@ class GeckoAutomation:
         self.notifier.notify(
             f"💧 Water refilled at {now}",
             "water/status", {"action": "refilled", "time": now}
-        )
-
-    def do_feed(self):
-        """Execute feeding sequence."""
-        log.info("=== Feeding triggered ===")
-        self.hardware.dispense_food()
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        self.state["last_feed"] = now
-
-        self.notifier.notify(
-            f"🦗 Mealworms dispensed at {now}",
-            "feeder/status", {"action": "dispensed", "time": now}
         )
 
     def do_sensor_check(self):
@@ -520,10 +458,10 @@ class GeckoAutomation:
         report = (
             "📊 <b>Daily Gecko Report</b>\n\n"
             f"💧 Last water: {self.state['last_water']}\n"
-            f"🦗 Last feed: {self.state['last_feed']}\n"
             f"🌡 Temp: {self.state['temperature']}\n"
             f"💧 Humidity: {self.state['humidity']}\n"
             f"🪣 Reservoir: {'✅ OK' if self.state['water_level_ok'] else '⚠️ LOW'}\n"
+            f"🦗 Feeding: check cameras (Petbank managed)\n"
             f"⏱ Uptime: {days}d {hours % 24}h"
         )
         self.notifier.notify(report, "status/daily", self.state)
@@ -554,9 +492,6 @@ class GeckoAutomation:
             schedule.run_pending()
 
             # Check for manual triggers (from web API)
-            if self.state.get("manual_feed_requested"):
-                self.state["manual_feed_requested"] = False
-                self.do_feed()
             if self.state.get("manual_water_requested"):
                 self.state["manual_water_requested"] = False
                 self.do_water()
