@@ -1,0 +1,50 @@
+{
+  "water": {
+    "enabled": true,
+    "schedule": "20:00",
+    "pump_duration_seconds": 3.0,
+    "gpio_relay_pin": 17
+  },
+  "feeder": {
+    "enabled": true,
+    "schedule_days": ["monday", "wednesday", "friday"],
+    "schedule_time": "21:00",
+    "servo_gpio_pin": 18,
+    "servo_open_angle": 90,
+    "servo_close_angle": 0,
+    "servo_hold_seconds": 2.0,
+    "vibe_gpio_pin": 27,
+    "vibe_duration_seconds": 1.0
+  },
+  "sensors": {
+    "bme280_enabled": true,
+    "bme280_i2c_address": "0x76",
+    "check_interval_seconds": 300,
+    "temp_min_f": 70,
+    "temp_max_f": 90,
+    "humidity_min": 20,
+    "humidity_max": 50
+  },
+  "water_level": {
+    "enabled": true,
+    "float_switch_gpio_pin": 22
+  },
+  "mqtt": {
+    "enabled": false,
+    "broker": "192.168.5.136",
+    "port": 1883,
+    "topic_prefix": "gecko-automation",
+    "username": "",
+    "password": ""
+  },
+  "telegram": {
+    "enabled": true,
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "web": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8090
+  }
+}

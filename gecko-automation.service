@@ -1,0 +1,14 @@
+[Unit]
+Description=Gecko Automation — Automated leopard gecko care
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/gecko-automation
+ExecStart=/usr/bin/python3 src/gecko_automation.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
