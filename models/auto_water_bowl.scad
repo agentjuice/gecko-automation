@@ -87,48 +87,32 @@ module bowl_shell() {
 }
 
 module spillway() {
-    // Open spill ramp that carries overflow away from the bowl wall.
-    // Slightly flared and sloped down.
+    // Support-free stepped spillway.
+    // A gentle staircase prints cleanly without supports and still guides overflow out.
     start_x = outer_len/2 - wall;
-    end_x = outer_len/2 + spillway_len;
-    start_z = floor_thickness + water_depth - 0.6;
-    end_z = max(1.2, start_z - spillway_drop);
-    width = overflow_width + 8;
+    width = overflow_width + 10;
+    steps = 4;
+    step_run = spillway_len / steps;
+    top_start_z = floor_thickness + water_depth - 0.6;
+    step_drop = spillway_drop / steps;
 
-    // floor of spillway
-    hull() {
-        translate([start_x, 0, start_z])
-            cube([1, width, 1.2], center = true);
-        translate([end_x, 0, end_z])
-            cube([1, width + 6, 1.2], center = true);
-    }
-
-    // left side rail
-    hull() {
-        translate([start_x, -(width/2 - spillway_wall/2), start_z + spillway_wall/2])
-            cube([1, spillway_wall, spillway_wall], center = true);
-        translate([end_x, -((width + 6)/2 - spillway_wall/2), end_z + spillway_wall/2])
-            cube([1, spillway_wall, spillway_wall], center = true);
-    }
-
-    // right side rail
-    hull() {
-        translate([start_x, (width/2 - spillway_wall/2), start_z + spillway_wall/2])
-            cube([1, spillway_wall, spillway_wall], center = true);
-        translate([end_x, ((width + 6)/2 - spillway_wall/2), end_z + spillway_wall/2])
-            cube([1, spillway_wall, spillway_wall], center = true);
+    for (i = [0 : steps - 1]) {
+        step_h = max(1.2, top_start_z - i * step_drop);
+        step_w = width + i * 1.5;
+        translate([start_x + step_run * (i + 0.5), 0, step_h / 2])
+            cube([step_run + 0.2, step_w, step_h], center = true);
     }
 }
 
 module tube_guide() {
-    // Simple rear-left guide with zip-tie slots.
-    guide_x = -outer_len/2 + wall + clip_depth/2 + 6;
+    // External rear-left guide, kept out of the drinking area.
+    guide_x = -outer_len/2 - clip_depth/2 - 1;
     guide_y = -outer_wid/2 + wall + clip_width/2 + 8;
     guide_z = outer_h;
     guide_h = clip_height_above_rim;
 
     difference() {
-        // body
+        // body outside the bowl wall
         translate([guide_x, guide_y, guide_z + guide_h/2])
             cube([clip_depth, clip_width, guide_h], center = true);
 
@@ -137,7 +121,7 @@ module tube_guide() {
             rotate([0, 90, 0])
                 cylinder(h = clip_depth + 0.2, d = tube_od + 0.8, center = false);
 
-        // front opening to turn saddle into an open notch
+        // opening to turn saddle into an open notch
         translate([guide_x + 1.5, guide_y, guide_z + guide_h - tube_od/2 - 1])
             cube([clip_depth, tube_od + 4, tube_od + 4], center = true);
 
@@ -148,15 +132,14 @@ module tube_guide() {
         }
     }
 
-    // small gusset to reinforce guide
+    // tie the guide back into the bowl wall with a printable gusset
     hull() {
-        translate([guide_x - clip_depth/2, guide_y, outer_h + 1])
+        translate([guide_x + clip_depth/2, guide_y, outer_h + 1])
             cube([1, clip_width, 2], center = true);
-        translate([guide_x - clip_depth/2 - 8, guide_y, outer_h - 6])
-            cube([1, clip_width, 2], center = true);
+        translate([-outer_len/2 + wall/2, guide_y, outer_h - 5])
+            cube([wall, clip_width, 2], center = true);
     }
 }
-
 module base_pad() {
     if (add_base_pad) {
         translate([0, 0, -base_pad_thickness])
