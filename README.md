@@ -105,11 +105,23 @@ Water Reservoir (2-3L)
 | Part | Est. Cost | Notes |
 |------|-----------|-------|
 | Feeding dish (smooth ceramic ramekin) | ~$3 | Mealworms can't climb out |
+| 3D printed water bowl | filament | See `models/auto_water_bowl.scad` |
 | Water reservoir (2-3L bottle) | free | From kitchen |
 | Shelf/stand for fridge | varies | Elevate above enclosure |
 | Funnel/collar for fridge hole | ~$2 | PVC ring or 3D printed, prevents worms missing the hole |
 
 **Estimated total: $65-100** (less if you have a Pi and misc parts)
+
+## 3D Models
+
+### `models/auto_water_bowl.scad`
+Parametric shallow water bowl with:
+- controlled overflow notch to fix water level
+- external spillway to direct daily overflow toward substrate / humid hide side
+- simple tube guide with zip-tie slots for the inflow line
+- printable in PETG without supports in the default orientation
+
+Suggested starting dimensions are tuned for a leopard gecko enclosure, but the file is easy to tweak.
 
 ## Software
 
