@@ -117,11 +117,18 @@ Water Reservoir (2-3L)
 ### `models/auto_water_bowl.scad`
 Parametric shallow water bowl with:
 - controlled overflow notch to fix water level
-- external spillway to direct daily overflow toward substrate / humid hide side
-- simple tube guide with zip-tie slots for the inflow line
-- printable in PETG without supports in the default orientation
+- simple external overflow concept
+- tube guide with zip-tie slots for the inflow line
+- printable in PETG as a simple top-fill / overflow bowl
 
-Suggested starting dimensions are tuned for a leopard gecko enclosure, but the file is easy to tweak.
+### `models/auto_water_bowl_bottom_drain.scad`
+Bottom-drain variant with:
+- drain hole in the bowl floor sized for a real bulkhead / push fitting
+- removable standpipe concept to set water level
+- pedestal base that hides the drain hardware and gives the outlet a rear exit path
+- external tube guide for the inlet line
+
+Suggested starting dimensions are tuned for a leopard gecko enclosure, but both files are easy to tweak.
 
 ## Software
 
